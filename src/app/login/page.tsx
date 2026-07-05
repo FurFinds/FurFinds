@@ -1,0 +1,83 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Container } from "@/components/Container";
+import { supabase } from "@/lib/supabase";
+
+const inputClass =
+  "w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-dark-blue";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    router.push("/account");
+  }
+
+  return (
+    <div className="bg-white py-16 lg:py-24">
+      <Container className="max-w-md">
+        <h1 className="font-display text-3xl font-light text-black">
+          Log in to <span className="text-dark-blue">FurFinds</span>
+        </h1>
+        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <div>
+            <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-black">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              className={inputClass}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-black">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              className={inputClass}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-full bg-light-blue px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-dark-blue disabled:opacity-60"
+          >
+            {loading ? "Logging in..." : "Log In"}
+          </button>
+        </form>
+        <p className="mt-6 text-center text-sm text-black/60">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" className="font-medium text-dark-blue hover:underline">
+            Sign up
+          </Link>
+        </p>
+      </Container>
+    </div>
+  );
+}
