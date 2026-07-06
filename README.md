@@ -77,7 +77,7 @@ apps with SSR).
    | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anon/publishable key |
 
-4. `wrangler.jsonc` and `open-next.config.ts` are already configured at the project root.
+4. `wrangler.toml` and `open-next.config.ts` are already configured at the project root.
 
 ### Local preview against Cloudflare's runtime
 
