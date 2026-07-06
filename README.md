@@ -68,8 +68,9 @@ apps with SSR).
 
 1. In the Cloudflare dashboard, connect this GitHub repository (Workers & Pages → Create →
    connect to Git).
-2. Set the build command to `npm run cf:build` and the deploy command to
-   `npx wrangler deploy` (or just use `npm run deploy` locally).
+2. Set the **Build command** to `npm run build` (this runs `next build`, then adapts the
+   output for Cloudflare via `@opennextjs/cloudflare`) and the **Deploy command** to
+   `npx wrangler deploy` (or just use `npm run deploy` locally, which chains both).
 3. Add these environment variables in the Cloudflare project settings:
 
    | Variable | Value |
