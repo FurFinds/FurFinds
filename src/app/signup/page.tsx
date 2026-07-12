@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Container } from "@/components/Container";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { supabase } from "@/lib/supabase";
 
 const inputClass =
@@ -23,16 +24,28 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signUp({
+    const role = accountType === "business" ? "business" : "pet_owner";
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: name, account_type: accountType } },
     });
-    setLoading(false);
     if (error) {
       setError(error.message);
+      setLoading(false);
       return;
     }
+
+    if (data.user) {
+      await supabase
+        .from("site_profiles")
+        .upsert(
+          { id: data.user.id, email, full_name: name, role },
+          { onConflict: "id", ignoreDuplicates: true }
+        );
+    }
+
+    setLoading(false);
     setSubmitted(true);
   }
 
@@ -72,7 +85,17 @@ export default function SignupPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+        <div className="mt-6">
+          <GoogleSignInButton accountType={accountType} />
+        </div>
+
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-black/10" />
+          <span className="text-xs font-medium uppercase tracking-wide text-black/40">or</span>
+          <div className="h-px flex-1 bg-black/10" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-black">
               Full Name

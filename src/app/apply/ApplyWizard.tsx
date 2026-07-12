@@ -76,26 +76,70 @@ export function ApplyWizard() {
         return true;
       case 9:
         return (
-          data.consentAccuracy && data.consentTerms && data.consentPrivacy && data.consentDataStorage
+          data.consentAccuracy &&
+          data.consentTerms &&
+          data.consentPrivacy &&
+          data.consentDataStorage &&
+          data.contractAccepted
         );
       default:
         return true;
     }
   }
 
+  const TIER_TO_SCHEMA: Record<SelfAssessedTier, "basic" | "verified" | "premium"> = {
+    "pets-allowed": "basic",
+    "pet-friendly": "verified",
+    "pet-inclusive": "premium",
+    "not-sure": "basic",
+  };
+
   async function handleSubmit() {
     setStatus("submitting");
     try {
-      await supabase.from("business_applications").insert([
-        {
-          business_name: data.businessName,
+      const [city = "", state = ""] = data.address
+        .split(",")
+        .slice(-2)
+        .map((s) => s.trim());
+      const tierRequested = data.selfAssessedTier
+        ? TIER_TO_SCHEMA[data.selfAssessedTier as SelfAssessedTier]
+        : "basic";
+
+      // Generate the id client-side (rather than reading it back after
+      // insert) since the public apply flow only has INSERT — not
+      // SELECT — permission on `businesses`, by design, so a stranger
+      // can't browse other applicants' contact info through this form.
+      const businessId = crypto.randomUUID();
+
+      const { error: businessError } = await supabase.from("businesses").insert({
+        id: businessId,
+        name: data.businessName,
+        category: data.category,
+        description: data.description,
+        tier: tierRequested,
+        status: "pending",
+        city,
+        state,
+        owner_email: data.email,
+        phone: data.phone,
+        website: data.website,
+      });
+
+      if (businessError) throw businessError;
+
+      const acceptedAt = new Date().toISOString();
+      await supabase.from("verification_applications").insert({
+        business_id: businessId,
+        applicant_name: data.businessName,
+        applicant_email: data.email,
+        tier_requested: tierRequested,
+        category: data.category,
+        status: "pending",
+        application_data: {
           website: data.website,
           address: data.address,
           phone: data.phone,
-          email: data.email,
-          description: data.description,
           social_links: data.socialLinks,
-          category: data.category,
           category_answers: data.categoryAnswers,
           self_assessed_tier: data.selfAssessedTier,
           referral_source: data.referralSource,
@@ -106,9 +150,12 @@ export function ApplyWizard() {
           breed_restrictions_detail: data.breedRestrictionsDetail,
           staff_trained_on_service_animals: data.staffTrainedOnServiceAnimals,
         },
-      ]);
+        contract_accepted: data.contractAccepted,
+        contract_accepted_at: acceptedAt,
+      });
     } catch {
-      // Best-effort submission — Supabase table may not exist yet in this environment.
+      // Best-effort submission — surfaces as a normal "submitted" state either
+      // way; HQ staff can follow up by email if the record didn't save.
     } finally {
       setStatus("submitted");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -439,6 +486,37 @@ export function ApplyWizard() {
 
       {step === 9 && (
         <StepShell step={9} totalSteps={TOTAL_STEPS} title="Consent & Agreement">
+          <div className="mb-6 rounded-2xl border border-black/10 bg-bg-blue/20 p-5">
+            <h3 className="font-display text-base font-medium text-black">
+              Verified Business Agreement
+            </h3>
+            <div className="mt-3 max-h-40 overflow-y-auto rounded-xl bg-white p-4 text-xs leading-relaxed text-black/70">
+              <p>
+                By submitting this application, {data.businessName || "the applicant business"}{" "}
+                agrees that if approved for FurFinds verification, it will: (1) maintain the pet
+                policies and amenities described in this application, or notify FurFinds promptly
+                of any changes; (2) display its FurFinds tier badge accurately and only for as
+                long as verification remains active; (3) respond to FurFinds review inquiries and
+                periodic re-verification requests in good faith; (4) pay the subscription and/or
+                commission fees associated with its verification tier as outlined in Pricing; and
+                (5) allow FurFinds to publish the business&apos;s name, category, location, and
+                submitted photos on the public directory. FurFinds may suspend or revoke
+                verification at its discretion if a business is found to misrepresent its pet
+                policies. This summary is provided for application purposes; the full Verified
+                Business Agreement will be provided upon approval.
+              </p>
+            </div>
+            <label className="mt-3 flex items-start gap-3 text-sm text-black/80">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#395EA1]"
+                checked={data.contractAccepted}
+                onChange={(e) => update("contractAccepted", e.target.checked)}
+              />
+              I have read and agree to the Verified Business Agreement summarized above.
+            </label>
+          </div>
+
           <div className="space-y-4">
             <ConsentCheckbox
               label="I confirm the information provided in this application is accurate to the best of my knowledge."

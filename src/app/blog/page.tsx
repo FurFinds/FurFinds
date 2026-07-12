@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { Container } from "@/components/Container";
+import { getAllBlogPosts } from "@/lib/blog";
 import { BlogClient } from "./BlogClient";
 
 export const metadata: Metadata = {
@@ -8,7 +9,11 @@ export const metadata: Metadata = {
   description: "Pet-friendly travel tips, business spotlights, pet care advice, and industry news.",
 };
 
-export default function BlogPage() {
+export const revalidate = 300;
+
+export default async function BlogPage() {
+  const posts = await getAllBlogPosts();
+
   return (
     <div className="bg-white py-10 lg:py-14">
       <Container>
@@ -20,7 +25,7 @@ export default function BlogPage() {
         </p>
 
         <Suspense fallback={null}>
-          <BlogClient />
+          <BlogClient posts={posts} />
         </Suspense>
       </Container>
     </div>

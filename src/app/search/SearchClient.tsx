@@ -5,8 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { List, Map as MapIcon, Search as SearchIcon } from "lucide-react";
 import { businesses } from "@/lib/data";
 import { CATEGORIES, TIERS, Category, Tier } from "@/lib/types";
+import { distanceInMiles, DISTANCE_OPTIONS } from "@/lib/geo";
 import { BusinessCard } from "@/components/BusinessCard";
 import { MapCard } from "@/components/MapCard";
+
+const LOCATIONS = Array.from(new Set(businesses.map((b) => `${b.city}, ${b.state}`))).sort();
 
 export function SearchClient() {
   const searchParams = useSearchParams();
@@ -16,8 +19,15 @@ export function SearchClient() {
   const [query, setQuery] = useState(initialQuery);
   const [selectedTiers, setSelectedTiers] = useState<Tier[]>(initialTier ? [initialTier] : []);
   const [selectedCategories, setSelectedCategories] = useState<Category[]>([]);
+  const [location, setLocation] = useState("");
+  const [maxDistance, setMaxDistance] = useState<number | null>(null);
   const [view, setView] = useState<"list" | "map">("list");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const locationOrigin = useMemo(
+    () => businesses.find((b) => `${b.city}, ${b.state}` === location) ?? null,
+    [location]
+  );
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -31,9 +41,12 @@ export function SearchClient() {
       const matchesTier = selectedTiers.length === 0 || selectedTiers.includes(b.tier);
       const matchesCategory =
         selectedCategories.length === 0 || selectedCategories.includes(b.category);
-      return matchesQuery && matchesTier && matchesCategory;
+      const matchesLocation = !location || `${b.city}, ${b.state}` === location;
+      const matchesDistance =
+        !maxDistance || !locationOrigin || distanceInMiles(locationOrigin, b) <= maxDistance;
+      return matchesQuery && matchesTier && matchesCategory && matchesLocation && matchesDistance;
     });
-  }, [query, selectedTiers, selectedCategories]);
+  }, [query, selectedTiers, selectedCategories, location, maxDistance, locationOrigin]);
 
   function toggleTier(tier: Tier) {
     setSelectedTiers((prev) =>
@@ -100,12 +113,67 @@ export function SearchClient() {
         </div>
       </div>
 
-      {(selectedTiers.length > 0 || selectedCategories.length > 0 || query) && (
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-black">Location</h3>
+        <select
+          value={location}
+          onChange={(e) => {
+            setLocation(e.target.value);
+            if (!e.target.value) setMaxDistance(null);
+          }}
+          className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-dark-blue"
+        >
+          <option value="">Any location</option>
+          {LOCATIONS.map((loc) => (
+            <option key={loc} value={loc}>
+              {loc}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {location && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-black">Distance</h3>
+          <div className="flex flex-col gap-2.5">
+            <label className="flex items-center gap-2.5 text-sm text-black/80">
+              <input
+                type="radio"
+                name="distance"
+                checked={maxDistance === null}
+                onChange={() => setMaxDistance(null)}
+                className="h-4 w-4 accent-[#395EA1]"
+              />
+              Any distance
+            </label>
+            {DISTANCE_OPTIONS.map((miles) => (
+              <label key={miles} className="flex items-center gap-2.5 text-sm text-black/80">
+                <input
+                  type="radio"
+                  name="distance"
+                  checked={maxDistance === miles}
+                  onChange={() => setMaxDistance(miles)}
+                  className="h-4 w-4 accent-[#395EA1]"
+                />
+                Within {miles} miles
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(selectedTiers.length > 0 ||
+        selectedCategories.length > 0 ||
+        query ||
+        location ||
+        maxDistance !== null) && (
         <button
           onClick={() => {
             setSelectedTiers([]);
             setSelectedCategories([]);
             setQuery("");
+            setLocation("");
+            setMaxDistance(null);
           }}
           className="text-left text-sm font-medium text-dark-blue hover:underline"
         >

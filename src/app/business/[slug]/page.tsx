@@ -130,7 +130,7 @@ export default async function BusinessProfilePage({
               </div>
 
               <div className="mt-6">
-                <ReviewForm businessName={business.name} />
+                <ReviewForm businessName={business.name} businessSlug={business.slug} />
               </div>
             </div>
           </div>
