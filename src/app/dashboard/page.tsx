@@ -12,7 +12,7 @@ import { cropToSquareJpeg } from "@/lib/image";
 type Pet = { name: string; species: string; breed?: string };
 
 type SiteProfile = {
-  full_name: string | null;
+  name: string | null;
   avatar_url: string | null;
   pets: Pet[];
   notification_prefs: { email_updates: boolean; review_replies: boolean };
@@ -28,7 +28,7 @@ type MyReview = {
 };
 
 const emptyProfile: SiteProfile = {
-  full_name: "",
+  name: "",
   avatar_url: null,
   pets: [],
   notification_prefs: { email_updates: true, review_replies: true },
@@ -49,14 +49,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return;
     supabase
-      .from("site_profiles")
-      .select("full_name, avatar_url, pets, notification_prefs")
+      .from("users")
+      .select("name, avatar_url, pets, notification_prefs")
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
         if (data) {
           setProfile({
-            full_name: data.full_name ?? "",
+            name: data.name ?? "",
             avatar_url: data.avatar_url,
             pets: data.pets ?? [],
             notification_prefs: data.notification_prefs ?? emptyProfile.notification_prefs,
@@ -65,11 +65,25 @@ export default function DashboardPage() {
       });
 
     supabase
-      .from("site_reviews")
-      .select("id, business_name, business_slug, rating, comment, created_at")
+      .from("reviews")
+      .select("id, rating, comment, created_at, business:businesses(name, slug)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setReviews(data ?? []));
+      .then(({ data }) => {
+        setReviews(
+          (data ?? []).map((r) => {
+            const business = r.business as unknown as { name: string; slug: string } | null;
+            return {
+              id: r.id,
+              rating: r.rating,
+              comment: r.comment,
+              created_at: r.created_at,
+              business_name: business?.name ?? "Unknown business",
+              business_slug: business?.slug ?? "",
+            };
+          })
+        );
+      });
   }, [user]);
 
   async function handleSignOut() {
@@ -84,9 +98,9 @@ export default function DashboardPage() {
     const merged = { ...profile, ...next };
     setProfile(merged);
     const { error } = await supabase
-      .from("site_profiles")
+      .from("users")
       .update({
-        full_name: merged.full_name,
+        name: merged.name,
         pets: merged.pets,
         notification_prefs: merged.notification_prefs,
       })
@@ -127,7 +141,7 @@ export default function DashboardPage() {
       } = supabase.storage.from("avatars").getPublicUrl(path);
 
       const { error: updateError } = await supabase
-        .from("site_profiles")
+        .from("users")
         .update({ avatar_url: publicUrl })
         .eq("id", user.id);
       if (updateError) throw updateError;
@@ -165,7 +179,7 @@ export default function DashboardPage() {
     );
   }
 
-  const name = profile.full_name || user.email || "Pet Parent";
+  const name = profile.name || user.email || "Pet Parent";
   const initials = name
     .split(" ")
     .map((p) => p[0])
@@ -235,8 +249,8 @@ export default function DashboardPage() {
               </label>
               <input
                 id="full_name"
-                value={profile.full_name ?? ""}
-                onChange={(e) => setProfile((p) => ({ ...p, full_name: e.target.value }))}
+                value={profile.name ?? ""}
+                onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
                 className="w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm outline-none focus:border-dark-blue"
               />
             </div>

@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { CATEGORIES, Category } from "@/lib/types";
+import { CATEGORY_TO_DB, TIER_TO_DB } from "@/lib/dbEnums";
 import { supabase } from "@/lib/supabase";
+import { useUser } from "@/lib/useUser";
 import { StepShell, Field, inputClass } from "./StepShell";
 import {
   ApplicationData,
@@ -32,6 +35,7 @@ const TIER_OPTIONS: { id: SelfAssessedTier; label: string }[] = [
 ];
 
 export function ApplyWizard() {
+  const { user, loading: userLoading } = useUser();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<ApplicationData>(initialApplicationData);
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted">("idle");
@@ -87,11 +91,11 @@ export function ApplyWizard() {
     }
   }
 
-  const TIER_TO_SCHEMA: Record<SelfAssessedTier, "basic" | "verified" | "premium"> = {
-    "pets-allowed": "basic",
-    "pet-friendly": "verified",
-    "pet-inclusive": "premium",
-    "not-sure": "basic",
+  const TIER_TO_SCHEMA: Record<SelfAssessedTier, "pets_allowed" | "pet_friendly" | "pet_inclusive"> = {
+    "pets-allowed": TIER_TO_DB["pets-allowed"],
+    "pet-friendly": TIER_TO_DB["pet-friendly"],
+    "pet-inclusive": TIER_TO_DB["pet-inclusive"],
+    "not-sure": TIER_TO_DB["pets-allowed"],
   };
 
   async function handleSubmit() {
@@ -103,7 +107,7 @@ export function ApplyWizard() {
         .map((s) => s.trim());
       const tierRequested = data.selfAssessedTier
         ? TIER_TO_SCHEMA[data.selfAssessedTier as SelfAssessedTier]
-        : "basic";
+        : "pets_allowed";
 
       // Generate the id client-side (rather than reading it back after
       // insert) since the public apply flow only has INSERT — not
@@ -112,53 +116,42 @@ export function ApplyWizard() {
       const businessId = crypto.randomUUID();
 
       // Set now, not on approval — so once HQ approves the application and
-      // flips status to 'active', the business is immediately reachable at
-      // /business/<slug> with no separate follow-up step. The short id
-      // suffix keeps this collision-free without a slug-availability
-      // round-trip the public form doesn't have permission to make anyway.
+      // flips verification_status to 'approved', the business is
+      // immediately reachable at /business/<slug> with no separate
+      // follow-up step. The short id suffix keeps this collision-free
+      // without a slug-availability round-trip the public form doesn't
+      // have permission to make anyway.
       const slug = `${data.businessName
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "")}-${businessId.slice(0, 8)}`;
 
+      const acceptedAt = new Date().toISOString();
+
       const { error: businessError } = await supabase.from("businesses").insert({
         id: businessId,
         slug,
+        owner_id: user?.id ?? null,
         name: data.businessName,
-        category: data.category,
+        category: data.category ? CATEGORY_TO_DB[data.category as Category] : "other",
         description: data.description,
-        long_description: data.description,
         tier: tierRequested,
-        status: "pending",
+        verification_status: "pending",
+        is_active: false,
         city,
         state,
         address: data.address,
-        owner_email: data.email,
         phone: data.phone,
         website: data.website,
-      });
-
-      if (businessError) throw businessError;
-
-      const acceptedAt = new Date().toISOString();
-      await supabase.from("verification_applications").insert({
-        business_id: businessId,
-        applicant_name: data.businessName,
-        applicant_email: data.email,
-        tier_requested: tierRequested,
-        category: data.category,
-        status: "pending",
+        service_animals_allowed: data.serviceAnimalsAllowed === "yes",
         application_data: {
-          website: data.website,
-          address: data.address,
-          phone: data.phone,
+          email: data.email,
           social_links: data.socialLinks,
           category_answers: data.categoryAnswers,
           self_assessed_tier: data.selfAssessedTier,
           referral_source: data.referralSource,
           photo_count: data.photos.length,
-          service_animals_allowed: data.serviceAnimalsAllowed,
           esa_allowed: data.esaAllowed,
           breed_restrictions: data.breedRestrictions,
           breed_restrictions_detail: data.breedRestrictionsDetail,
@@ -167,6 +160,8 @@ export function ApplyWizard() {
         contract_accepted: data.contractAccepted,
         contract_accepted_at: acceptedAt,
       });
+
+      if (businessError) throw businessError;
     } catch {
       // Best-effort submission — surfaces as a normal "submitted" state either
       // way; HQ staff can follow up by email if the record didn't save.
@@ -190,6 +185,31 @@ export function ApplyWizard() {
     }
     setFileError("");
     update("photos", [...data.photos, ...files.map((f) => f.name)]);
+  }
+
+  if (!userLoading && !user) {
+    return (
+      <div className="flex flex-col items-center rounded-2xl bg-bg-blue/40 px-6 py-16 text-center">
+        <h2 className="font-display text-2xl font-medium text-black">Sign up to apply</h2>
+        <p className="mt-2 max-w-md text-black/70">
+          Create a free business account first, then come back here to apply for verification.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Link
+            href="/signup"
+            className="rounded-full bg-light-blue px-6 py-2.5 text-sm font-medium text-white hover:bg-dark-blue"
+          >
+            Sign Up
+          </Link>
+          <Link
+            href="/login"
+            className="rounded-full border-2 border-light-blue px-6 py-2.5 text-sm font-medium text-dark-blue hover:bg-bg-blue"
+          >
+            Log In
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   if (status === "submitted") {

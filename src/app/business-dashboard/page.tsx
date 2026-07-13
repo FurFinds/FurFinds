@@ -11,7 +11,7 @@ import { useUser } from "@/lib/useUser";
 type OwnedBusiness = {
   id: string;
   name: string;
-  status: string;
+  verification_status: string;
   tier: string;
   city: string | null;
   state: string | null;
@@ -24,13 +24,13 @@ export default function BusinessDashboardPage() {
   const [leadCount, setLeadCount] = useState(0);
 
   useEffect(() => {
-    if (!user?.email) return;
+    if (!user?.id) return;
     supabase
       .from("businesses")
-      .select("id, name, status, tier, city, state")
-      .eq("owner_email", user.email)
+      .select("id, name, verification_status, tier, city, state")
+      .eq("owner_id", user.id)
       .then(({ data }) => setBusinesses(data ?? []));
-  }, [user?.email]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!businesses || businesses.length === 0) return;
@@ -100,7 +100,8 @@ export default function BusinessDashboardPage() {
           {primaryBusiness ? (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold capitalize text-dark-blue">
-                {primaryBusiness.name} — {primaryBusiness.status} ({primaryBusiness.tier})
+                {primaryBusiness.name} — {primaryBusiness.verification_status.replace("_", " ")} (
+                {primaryBusiness.tier.replace("_", " ")})
               </span>
               {businesses && businesses.length > 1 && (
                 <span className="text-xs text-black/50">

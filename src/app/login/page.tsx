@@ -28,11 +28,7 @@ export default function LoginPage() {
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("site_profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single();
+    const { data: profile } = await supabase.from("users").select("role").eq("id", data.user.id).single();
 
     setLoading(false);
     router.push(profile?.role === "business" ? "/business-dashboard" : "/dashboard");

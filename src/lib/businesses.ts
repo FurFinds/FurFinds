@@ -1,71 +1,64 @@
 import { supabase } from "./supabase";
 import { businesses as staticBusinesses } from "./data";
-import type { Business, Category, Tier } from "./types";
+import { CATEGORY_FROM_DB, TIER_FROM_DB, type DbCategory, type DbTier } from "./dbEnums";
+import type { Business } from "./types";
 
 type DbBusiness = {
+  id: string;
   slug: string | null;
   name: string;
-  category: string | null;
-  tier: "basic" | "verified" | "premium";
-  description: string | null;
-  long_description: string | null;
+  category: DbCategory | null;
+  tier: DbTier;
+  address: string | null;
   city: string | null;
   state: string | null;
-  address: string | null;
   phone: string | null;
   website: string | null;
-  hours: string | null;
+  description: string | null;
+  business_hours: string | null;
   pet_policy: string | null;
-  service_animal_policy: string | null;
+  service_animals_allowed: boolean | null;
   esa_policy: string | null;
-  amenities: string[] | null;
-  images: string[] | null;
-  rating: number | null;
-  review_count: number | null;
-  featured: boolean;
+  photos: string[] | null;
+  verification_date: string | null;
+  created_at: string;
   lat: number | null;
   lng: number | null;
-  updated_at: string;
-  created_at: string;
-};
-
-const TIER_FROM_SCHEMA: Record<DbBusiness["tier"], Tier> = {
-  basic: "pets-allowed",
-  verified: "pet-friendly",
-  premium: "pet-inclusive",
 };
 
 const BUSINESS_COLUMNS =
-  "slug, name, category, tier, description, long_description, city, state, address, phone, website, hours, pet_policy, service_animal_policy, esa_policy, amenities, images, rating, review_count, featured, lat, lng, updated_at, created_at";
+  "id, slug, name, category, tier, address, city, state, phone, website, description, business_hours, pet_policy, service_animals_allowed, esa_policy, photos, verification_date, created_at, lat, lng";
 
 function mapDbBusiness(row: DbBusiness): Business {
   const verifiedDate = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
-    new Date(row.updated_at || row.created_at)
+    new Date(row.verification_date || row.created_at)
   );
 
   return {
     slug: row.slug ?? "",
     name: row.name,
-    category: (row.category as Category) ?? "Other",
-    tier: TIER_FROM_SCHEMA[row.tier] ?? "pets-allowed",
+    category: row.category ? CATEGORY_FROM_DB[row.category] : "Other",
+    tier: TIER_FROM_DB[row.tier],
     description: row.description ?? "",
-    longDescription: row.long_description ?? row.description ?? "",
+    longDescription: row.description ?? "",
     city: row.city ?? "",
     state: row.state ?? "",
     address: row.address ?? [row.city, row.state].filter(Boolean).join(", "),
     phone: row.phone ?? "",
     website: row.website ?? "",
-    hours: row.hours ?? "",
+    hours: row.business_hours ?? "",
     petPolicy: row.pet_policy ?? "",
-    serviceAnimalPolicy: row.service_animal_policy ?? "",
+    serviceAnimalPolicy: row.service_animals_allowed
+      ? "Service animals welcome, no restrictions."
+      : "Please contact the business about service animal accommodations.",
     esaPolicy: row.esa_policy ?? "",
-    amenities: row.amenities ?? [],
+    amenities: [],
     images:
-      row.images && row.images.length > 0
-        ? row.images
+      row.photos && row.photos.length > 0
+        ? row.photos
         : ["https://picsum.photos/seed/furfinds-business-fallback/900/650"],
-    rating: row.rating ?? 0,
-    reviewCount: row.review_count ?? 0,
+    rating: 0,
+    reviewCount: 0,
     verifiedDate,
     reviews: [],
     lat: row.lat ?? 0,
@@ -73,36 +66,72 @@ function mapDbBusiness(row: DbBusiness): Business {
   };
 }
 
+async function attachReviewStats(rows: DbBusiness[], businesses: Business[]): Promise<Business[]> {
+  if (rows.length === 0) return businesses;
+
+  const slugById = new Map(rows.map((r) => [r.id, r.slug]));
+  const { data: reviewRows } = await supabase
+    .from("reviews")
+    .select("business_id, rating")
+    .in(
+      "business_id",
+      rows.map((r) => r.id)
+    );
+
+  const statsBySlug = new Map<string, { total: number; count: number }>();
+  for (const r of reviewRows ?? []) {
+    const slug = slugById.get(r.business_id as string);
+    if (!slug) continue;
+    const entry = statsBySlug.get(slug) ?? { total: 0, count: 0 };
+    entry.total += r.rating as number;
+    entry.count += 1;
+    statsBySlug.set(slug, entry);
+  }
+
+  return businesses.map((b) => {
+    const stats = statsBySlug.get(b.slug);
+    if (!stats || stats.count === 0) return b;
+    return { ...b, rating: Math.round((stats.total / stats.count) * 10) / 10, reviewCount: stats.count };
+  });
+}
+
 /** Live business directory, sourced from Supabase. Falls back to the
  * curated static list only on a genuine fetch error (e.g. Supabase isn't
- * configured yet) — an empty-but-successful query means "no active
+ * configured yet) — an empty-but-successful query means "no approved
  * businesses yet," which is shown as-is rather than papered over. */
 export async function getAllBusinesses(): Promise<Business[]> {
   const { data, error } = await supabase
     .from("businesses")
     .select(BUSINESS_COLUMNS)
-    .eq("status", "active")
+    .eq("verification_status", "approved")
+    .eq("is_active", true)
     .not("slug", "is", null)
-    .order("featured", { ascending: false })
-    .order("rating", { ascending: false });
+    .order("verification_score", { ascending: false });
 
   if (error) {
     console.warn("Falling back to static business data:", error.message);
     return staticBusinesses;
   }
 
-  return (data ?? []).map((row) => mapDbBusiness(row as DbBusiness));
+  const rows = (data ?? []) as DbBusiness[];
+  const businesses = rows.map(mapDbBusiness);
+  return attachReviewStats(rows, businesses);
 }
 
 export async function getBusinessBySlug(slug: string): Promise<Business | undefined> {
   const { data, error } = await supabase
     .from("businesses")
     .select(BUSINESS_COLUMNS)
-    .eq("status", "active")
+    .eq("verification_status", "approved")
+    .eq("is_active", true)
     .eq("slug", slug)
     .maybeSingle();
 
-  if (!error && data) return mapDbBusiness(data as DbBusiness);
+  if (!error && data) {
+    const row = data as DbBusiness;
+    const [business] = await attachReviewStats([row], [mapDbBusiness(row)]);
+    return business;
+  }
   return staticBusinesses.find((b) => b.slug === slug);
 }
 
@@ -115,17 +144,20 @@ export interface LiveReview {
 }
 
 export async function getReviewsForBusiness(slug: string): Promise<LiveReview[]> {
+  const { data: business } = await supabase.from("businesses").select("id").eq("slug", slug).maybeSingle();
+  if (!business) return [];
+
   const { data, error } = await supabase
-    .from("site_reviews")
-    .select("id, author_name, rating, comment, created_at")
-    .eq("business_slug", slug)
+    .from("reviews")
+    .select("id, rating, comment, created_at, user:users(name)")
+    .eq("business_id", business.id)
     .order("created_at", { ascending: false });
 
   if (error || !data) return [];
 
   return data.map((r) => ({
     id: r.id,
-    authorName: r.author_name || "FurFinds Pet Parent",
+    authorName: (r.user as { name?: string } | null)?.name || "FurFinds Pet Parent",
     rating: r.rating,
     comment: r.comment,
     createdAt: r.created_at,

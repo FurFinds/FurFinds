@@ -38,11 +38,8 @@ export default function SignupPage() {
 
     if (data.user) {
       await supabase
-        .from("site_profiles")
-        .upsert(
-          { id: data.user.id, email, full_name: name, role },
-          { onConflict: "id", ignoreDuplicates: true }
-        );
+        .from("users")
+        .upsert({ id: data.user.id, email, name, role }, { onConflict: "id", ignoreDuplicates: true });
     }
 
     setLoading(false);

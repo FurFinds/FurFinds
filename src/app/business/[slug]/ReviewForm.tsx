@@ -26,11 +26,22 @@ export function ReviewForm({
     if (!user) return;
     setSubmitting(true);
     setError("");
-    const { error } = await supabase.from("site_reviews").insert({
+
+    const { data: business, error: lookupError } = await supabase
+      .from("businesses")
+      .select("id")
+      .eq("slug", businessSlug)
+      .maybeSingle();
+
+    if (lookupError || !business) {
+      setSubmitting(false);
+      setError("Couldn't find this business to review. Please try again later.");
+      return;
+    }
+
+    const { error } = await supabase.from("reviews").insert({
+      business_id: business.id,
       user_id: user.id,
-      author_name: (user.user_metadata?.full_name as string) || null,
-      business_slug: businessSlug,
-      business_name: businessName,
       rating,
       comment,
     });
