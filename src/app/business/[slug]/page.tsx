@@ -5,12 +5,15 @@ import { Container } from "@/components/Container";
 import { TierBadge } from "@/components/TierBadge";
 import { StarRating } from "@/components/StarRating";
 import { MapCard } from "@/components/MapCard";
-import { businesses, getBusinessBySlug } from "@/lib/data";
+import { getBusinessBySlug, getReviewsForBusiness } from "@/lib/businesses";
 import { Gallery } from "./Gallery";
 import { ReviewForm } from "./ReviewForm";
 
+export const revalidate = 60;
+export const dynamicParams = true;
+
 export function generateStaticParams() {
-  return businesses.map((b) => ({ slug: b.slug }));
+  return [];
 }
 
 export async function generateMetadata({
@@ -19,7 +22,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const business = getBusinessBySlug(slug);
+  const business = await getBusinessBySlug(slug);
   if (!business) return {};
   return {
     title: `${business.name} — FurFinds`,
@@ -33,8 +36,10 @@ export default async function BusinessProfilePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const business = getBusinessBySlug(slug);
+  const business = await getBusinessBySlug(slug);
   if (!business) notFound();
+
+  const reviews = await getReviewsForBusiness(slug);
 
   return (
     <div className="bg-white py-10">
@@ -112,19 +117,29 @@ export default async function BusinessProfilePage({
             {/* Reviews */}
             <div className="mt-10">
               <h2 className="font-display text-xl font-medium text-black">
-                Reviews ({business.reviewCount})
+                Reviews ({reviews.length})
               </h2>
               <div className="mt-4 space-y-5">
-                {business.reviews.map((review) => (
+                {reviews.length === 0 && (
+                  <p className="text-sm text-black/60">
+                    No reviews yet — be the first to share how your visit went.
+                  </p>
+                )}
+                {reviews.map((review) => (
                   <div key={review.id} className="rounded-2xl border border-black/5 p-5">
                     <div className="flex items-center justify-between">
-                      <p className="font-semibold text-black">{review.author}</p>
-                      <span className="text-xs text-black/50">{review.date}</span>
+                      <p className="font-semibold text-black">{review.authorName}</p>
+                      <span className="text-xs text-black/50">
+                        {new Intl.DateTimeFormat("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        }).format(new Date(review.createdAt))}
+                      </span>
                     </div>
                     <div className="mt-1">
                       <StarRating rating={review.rating} size={14} />
                     </div>
-                    <p className="mt-2 text-sm text-black/75">{review.comment}</p>
+                    {review.comment && <p className="mt-2 text-sm text-black/75">{review.comment}</p>}
                   </div>
                 ))}
               </div>

@@ -28,6 +28,7 @@ export function ReviewForm({
     setError("");
     const { error } = await supabase.from("site_reviews").insert({
       user_id: user.id,
+      author_name: (user.user_metadata?.full_name as string) || null,
       business_slug: businessSlug,
       business_name: businessName,
       rating,

@@ -3,18 +3,19 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { List, Map as MapIcon, Search as SearchIcon } from "lucide-react";
-import { businesses } from "@/lib/data";
-import { CATEGORIES, TIERS, Category, Tier } from "@/lib/types";
+import { CATEGORIES, TIERS, Category, Tier, Business } from "@/lib/types";
 import { distanceInMiles, DISTANCE_OPTIONS } from "@/lib/geo";
 import { BusinessCard } from "@/components/BusinessCard";
 import { MapCard } from "@/components/MapCard";
 
-const LOCATIONS = Array.from(new Set(businesses.map((b) => `${b.city}, ${b.state}`))).sort();
-
-export function SearchClient() {
+export function SearchClient({ businesses }: { businesses: Business[] }) {
   const searchParams = useSearchParams();
   const initialTier = searchParams.get("tier") as Tier | null;
   const initialQuery = searchParams.get("q") ?? "";
+  const locations = useMemo(
+    () => Array.from(new Set(businesses.map((b) => `${b.city}, ${b.state}`))).sort(),
+    [businesses]
+  );
 
   const [query, setQuery] = useState(initialQuery);
   const [selectedTiers, setSelectedTiers] = useState<Tier[]>(initialTier ? [initialTier] : []);
@@ -26,7 +27,7 @@ export function SearchClient() {
 
   const locationOrigin = useMemo(
     () => businesses.find((b) => `${b.city}, ${b.state}` === location) ?? null,
-    [location]
+    [businesses, location]
   );
 
   const results = useMemo(() => {
@@ -46,7 +47,7 @@ export function SearchClient() {
         !maxDistance || !locationOrigin || distanceInMiles(locationOrigin, b) <= maxDistance;
       return matchesQuery && matchesTier && matchesCategory && matchesLocation && matchesDistance;
     });
-  }, [query, selectedTiers, selectedCategories, location, maxDistance, locationOrigin]);
+  }, [businesses, query, selectedTiers, selectedCategories, location, maxDistance, locationOrigin]);
 
   function toggleTier(tier: Tier) {
     setSelectedTiers((prev) =>
@@ -124,7 +125,7 @@ export function SearchClient() {
           className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm outline-none focus:border-dark-blue"
         >
           <option value="">Any location</option>
-          {LOCATIONS.map((loc) => (
+          {locations.map((loc) => (
             <option key={loc} value={loc}>
               {loc}
             </option>

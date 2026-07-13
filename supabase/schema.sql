@@ -63,6 +63,10 @@ create trigger on_auth_user_created_site
 create table if not exists public.site_reviews (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references public.site_profiles (id) on delete cascade,
+  -- Denormalized display name at time of posting, so the review card can
+  -- render without a join. Also lets editorial/seed reviews (no real
+  -- account behind them, user_id null) show a byline.
+  author_name text,
   business_slug text not null,
   business_name text not null,
   rating int not null check (rating between 1 and 5),
@@ -70,6 +74,8 @@ create table if not exists public.site_reviews (
   photo_url text,
   created_at timestamptz not null default now()
 );
+
+alter table public.site_reviews add column if not exists author_name text;
 
 create index if not exists site_reviews_user_id_idx on public.site_reviews (user_id);
 create index if not exists site_reviews_business_slug_idx on public.site_reviews (business_slug);
@@ -115,3 +121,22 @@ create policy "site_reviews_update_self" on public.site_reviews
 drop policy if exists "site_reviews_delete_self" on public.site_reviews;
 create policy "site_reviews_delete_self" on public.site_reviews
   for delete using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- Seed reviews for the curated launch business listings (see
+-- FurFinds-HQ/supabase/schema.sql for the matching businesses insert).
+-- user_id is null — these are editorial/launch reviews, not tied to a real
+-- site_profiles account. Fixed ids make this safe to re-run.
+-- ---------------------------------------------------------------------------
+insert into public.site_reviews (id, user_id, author_name, business_slug, business_name, rating, comment)
+values
+  ('00000000-0000-4000-8000-000000000001', null, 'Marisol P.', 'the-hound-house-cafe', 'The Hound House Cafe', 5, 'My golden retriever has his own regular seat here. Staff know him by name!'),
+  ('00000000-0000-4000-8000-000000000002', null, 'Devon K.', 'the-hound-house-cafe', 'The Hound House Cafe', 5, 'Best patio in the city for a coffee date with your dog.'),
+  ('00000000-0000-4000-8000-000000000003', null, 'Alan R.', 'wagging-tail-inn', 'Wagging Tail Inn', 5, 'They treated our senior dog like royalty. Will always book here.'),
+  ('00000000-0000-4000-8000-000000000004', null, 'Priya S.', 'riverside-bark-park', 'Riverside Bark Park', 4, 'Great space, gets crowded on weekends but well maintained.'),
+  ('00000000-0000-4000-8000-000000000005', null, 'Jamie L.', 'paws-and-claws-boutique', 'Paws & Claws Boutique', 5, 'Staff let my cat sniff every toy before we bought it. So sweet.'),
+  ('00000000-0000-4000-8000-000000000006', null, 'Nora T.', 'furry-friends-grooming-studio', 'Furry Friends Grooming Studio', 5, 'The only groomer my anxious rescue dog has ever been calm with.'),
+  ('00000000-0000-4000-8000-000000000007', null, 'Chris B.', 'cornerstone-veterinary-clinic', 'Cornerstone Veterinary Clinic', 5, 'They saved our cat''s life on a Sunday night. Forever grateful.'),
+  ('00000000-0000-4000-8000-000000000008', null, 'Elena V.', 'yappy-hour-pet-events', 'Yappy Hour Pet Events', 5, 'Adopted our second dog at one of their events. Wonderful community.'),
+  ('00000000-0000-4000-8000-000000000009', null, 'Tom H.', 'petcab-rides', 'PetCab Rides', 4, 'Great for vet trips when I don''t have my own car.')
+on conflict (id) do nothing;

@@ -111,15 +111,29 @@ export function ApplyWizard() {
       // can't browse other applicants' contact info through this form.
       const businessId = crypto.randomUUID();
 
+      // Set now, not on approval — so once HQ approves the application and
+      // flips status to 'active', the business is immediately reachable at
+      // /business/<slug> with no separate follow-up step. The short id
+      // suffix keeps this collision-free without a slug-availability
+      // round-trip the public form doesn't have permission to make anyway.
+      const slug = `${data.businessName
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")}-${businessId.slice(0, 8)}`;
+
       const { error: businessError } = await supabase.from("businesses").insert({
         id: businessId,
+        slug,
         name: data.businessName,
         category: data.category,
         description: data.description,
+        long_description: data.description,
         tier: tierRequested,
         status: "pending",
         city,
         state,
+        address: data.address,
         owner_email: data.email,
         phone: data.phone,
         website: data.website,
