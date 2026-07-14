@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { CATEGORIES, Category } from "@/lib/types";
+import { CATEGORY_TO_DB, TIER_TO_DB } from "@/lib/dbEnums";
 import { supabase } from "@/lib/supabase";
+import { useUser } from "@/lib/useUser";
 import { StepShell, Field, inputClass } from "./StepShell";
 import {
   ApplicationData,
@@ -32,6 +35,7 @@ const TIER_OPTIONS: { id: SelfAssessedTier; label: string }[] = [
 ];
 
 export function ApplyWizard() {
+  const { user, loading: userLoading } = useUser();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<ApplicationData>(initialApplicationData);
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted">("idle");
@@ -76,39 +80,91 @@ export function ApplyWizard() {
         return true;
       case 9:
         return (
-          data.consentAccuracy && data.consentTerms && data.consentPrivacy && data.consentDataStorage
+          data.consentAccuracy &&
+          data.consentTerms &&
+          data.consentPrivacy &&
+          data.consentDataStorage &&
+          data.contractAccepted
         );
       default:
         return true;
     }
   }
 
+  const TIER_TO_SCHEMA: Record<SelfAssessedTier, "pets_allowed" | "pet_friendly" | "pet_inclusive"> = {
+    "pets-allowed": TIER_TO_DB["pets-allowed"],
+    "pet-friendly": TIER_TO_DB["pet-friendly"],
+    "pet-inclusive": TIER_TO_DB["pet-inclusive"],
+    "not-sure": TIER_TO_DB["pets-allowed"],
+  };
+
   async function handleSubmit() {
     setStatus("submitting");
     try {
-      await supabase.from("business_applications").insert([
-        {
-          business_name: data.businessName,
-          website: data.website,
-          address: data.address,
-          phone: data.phone,
+      const [city = "", state = ""] = data.address
+        .split(",")
+        .slice(-2)
+        .map((s) => s.trim());
+      const tierRequested = data.selfAssessedTier
+        ? TIER_TO_SCHEMA[data.selfAssessedTier as SelfAssessedTier]
+        : "pets_allowed";
+
+      // Generate the id client-side (rather than reading it back after
+      // insert) since the public apply flow only has INSERT — not
+      // SELECT — permission on `businesses`, by design, so a stranger
+      // can't browse other applicants' contact info through this form.
+      const businessId = crypto.randomUUID();
+
+      // Set now, not on approval — so once HQ approves the application and
+      // flips verification_status to 'approved', the business is
+      // immediately reachable at /business/<slug> with no separate
+      // follow-up step. The short id suffix keeps this collision-free
+      // without a slug-availability round-trip the public form doesn't
+      // have permission to make anyway.
+      const slug = `${data.businessName
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")}-${businessId.slice(0, 8)}`;
+
+      const acceptedAt = new Date().toISOString();
+
+      const { error: businessError } = await supabase.from("businesses").insert({
+        id: businessId,
+        slug,
+        owner_id: user?.id ?? null,
+        name: data.businessName,
+        category: data.category ? CATEGORY_TO_DB[data.category as Category] : "other",
+        description: data.description,
+        tier: tierRequested,
+        verification_status: "pending",
+        is_active: false,
+        city,
+        state,
+        address: data.address,
+        phone: data.phone,
+        website: data.website,
+        service_animals_allowed: data.serviceAnimalsAllowed === "yes",
+        application_data: {
           email: data.email,
-          description: data.description,
           social_links: data.socialLinks,
-          category: data.category,
           category_answers: data.categoryAnswers,
           self_assessed_tier: data.selfAssessedTier,
           referral_source: data.referralSource,
           photo_count: data.photos.length,
-          service_animals_allowed: data.serviceAnimalsAllowed,
           esa_allowed: data.esaAllowed,
           breed_restrictions: data.breedRestrictions,
           breed_restrictions_detail: data.breedRestrictionsDetail,
           staff_trained_on_service_animals: data.staffTrainedOnServiceAnimals,
         },
-      ]);
+        contract_accepted: data.contractAccepted,
+        contract_accepted_at: acceptedAt,
+      });
+
+      if (businessError) throw businessError;
     } catch {
-      // Best-effort submission — Supabase table may not exist yet in this environment.
+      // Best-effort submission — surfaces as a normal "submitted" state either
+      // way; HQ staff can follow up by email if the record didn't save.
     } finally {
       setStatus("submitted");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -131,6 +187,10 @@ export function ApplyWizard() {
     update("photos", [...data.photos, ...files.map((f) => f.name)]);
   }
 
+  // Checked before the logged-out gate below: once handleSubmit() has
+  // resolved, a session that lapses afterward (a background token refresh
+  // failing, a sign-out in another tab) must not swap this confirmation
+  // out for "Sign up to apply" — the application was already saved.
   if (status === "submitted") {
     return (
       <div className="flex flex-col items-center rounded-2xl bg-bg-blue/40 px-6 py-16 text-center">
@@ -143,6 +203,31 @@ export function ApplyWizard() {
           your application and follow up at {data.email || "the email you provided"} within 5–7
           business days.
         </p>
+      </div>
+    );
+  }
+
+  if (!userLoading && !user) {
+    return (
+      <div className="flex flex-col items-center rounded-2xl bg-bg-blue/40 px-6 py-16 text-center">
+        <h2 className="font-display text-2xl font-medium text-black">Sign up to apply</h2>
+        <p className="mt-2 max-w-md text-black/70">
+          Create a free business account first, then come back here to apply for verification.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Link
+            href="/signup"
+            className="rounded-full bg-light-blue px-6 py-2.5 text-sm font-medium text-white hover:bg-dark-blue"
+          >
+            Sign Up
+          </Link>
+          <Link
+            href="/login"
+            className="rounded-full border-2 border-light-blue px-6 py-2.5 text-sm font-medium text-dark-blue hover:bg-bg-blue"
+          >
+            Log In
+          </Link>
+        </div>
       </div>
     );
   }
@@ -439,6 +524,37 @@ export function ApplyWizard() {
 
       {step === 9 && (
         <StepShell step={9} totalSteps={TOTAL_STEPS} title="Consent & Agreement">
+          <div className="mb-6 rounded-2xl border border-black/10 bg-bg-blue/20 p-5">
+            <h3 className="font-display text-base font-medium text-black">
+              Verified Business Agreement
+            </h3>
+            <div className="mt-3 max-h-40 overflow-y-auto rounded-xl bg-white p-4 text-xs leading-relaxed text-black/70">
+              <p>
+                By submitting this application, {data.businessName || "the applicant business"}{" "}
+                agrees that if approved for FurFinds verification, it will: (1) maintain the pet
+                policies and amenities described in this application, or notify FurFinds promptly
+                of any changes; (2) display its FurFinds tier badge accurately and only for as
+                long as verification remains active; (3) respond to FurFinds review inquiries and
+                periodic re-verification requests in good faith; (4) pay the subscription and/or
+                commission fees associated with its verification tier as outlined in Pricing; and
+                (5) allow FurFinds to publish the business&apos;s name, category, location, and
+                submitted photos on the public directory. FurFinds may suspend or revoke
+                verification at its discretion if a business is found to misrepresent its pet
+                policies. This summary is provided for application purposes; the full Verified
+                Business Agreement will be provided upon approval.
+              </p>
+            </div>
+            <label className="mt-3 flex items-start gap-3 text-sm text-black/80">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[#395EA1]"
+                checked={data.contractAccepted}
+                onChange={(e) => update("contractAccepted", e.target.checked)}
+              />
+              I have read and agree to the Verified Business Agreement summarized above.
+            </label>
+          </div>
+
           <div className="space-y-4">
             <ConsentCheckbox
               label="I confirm the information provided in this application is accurate to the best of my knowledge."

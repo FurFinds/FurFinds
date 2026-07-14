@@ -5,7 +5,7 @@ import { Container } from "@/components/Container";
 import { SearchBar } from "@/components/SearchBar";
 import { ButtonLink } from "@/components/Button";
 import { BusinessCard } from "@/components/BusinessCard";
-import { businesses } from "@/lib/data";
+import { getAllBusinesses } from "@/lib/businesses";
 
 const steps = [
   {
@@ -60,7 +60,10 @@ const tiers = [
   },
 ];
 
-export default function Home() {
+export const revalidate = 60;
+
+export default async function Home() {
+  const businesses = await getAllBusinesses();
   const featured = businesses.slice(0, 8);
 
   return (

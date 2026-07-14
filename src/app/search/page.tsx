@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { Container } from "@/components/Container";
+import { getAllBusinesses } from "@/lib/businesses";
 import { SearchClient } from "./SearchClient";
 
 export const metadata: Metadata = {
@@ -8,7 +9,11 @@ export const metadata: Metadata = {
   description: "Search verified pet-friendly businesses by location, category, and tier.",
 };
 
-export default function SearchPage() {
+export const revalidate = 60;
+
+export default async function SearchPage() {
+  const businesses = await getAllBusinesses();
+
   return (
     <div className="bg-white py-10 lg:py-14">
       <Container>
@@ -20,7 +25,7 @@ export default function SearchPage() {
         </p>
         <div className="mt-8">
           <Suspense fallback={null}>
-            <SearchClient />
+            <SearchClient businesses={businesses} />
           </Suspense>
         </div>
       </Container>

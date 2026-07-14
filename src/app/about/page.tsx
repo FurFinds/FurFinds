@@ -1,12 +1,26 @@
 import { Metadata } from "next";
+import Image from "next/image";
 import { Container } from "@/components/Container";
+import { supabase } from "@/lib/supabase";
 
 export const metadata: Metadata = {
   title: "About Us — FurFinds",
   description: "Meet the team behind FurFinds and learn about our mission and vision.",
 };
 
-export default function AboutPage() {
+async function getFounderPhotoUrl(): Promise<string | null> {
+  const { data } = await supabase
+    .from("site_settings")
+    .select("value")
+    .eq("key", "founder_photo")
+    .single();
+  const url = (data?.value as { url?: string } | null)?.url;
+  return url ?? null;
+}
+
+export default async function AboutPage() {
+  const founderPhotoUrl = await getFounderPhotoUrl();
+
   return (
     <div className="bg-white py-16 lg:py-24">
       <Container className="max-w-4xl">
@@ -38,8 +52,20 @@ export default function AboutPage() {
             Founder Story
           </h2>
           <div className="mt-8 flex flex-col items-center gap-8 sm:flex-row sm:items-start">
-            <div className="flex h-40 w-40 shrink-0 items-center justify-center rounded-full bg-dark-blue text-4xl font-medium text-white">
-              KM
+            <div className="relative h-40 w-40 shrink-0 overflow-hidden rounded-full bg-dark-blue">
+              {founderPhotoUrl ? (
+                <Image
+                  src={founderPhotoUrl}
+                  alt="Kashmere Miller, Founder & CEO of FurFinds"
+                  fill
+                  sizes="160px"
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-4xl font-medium text-white">
+                  KM
+                </div>
+              )}
             </div>
             <div>
               <p className="text-black/75">

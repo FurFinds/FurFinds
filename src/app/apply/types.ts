@@ -39,6 +39,7 @@ export interface ApplicationData {
   consentTerms: boolean;
   consentPrivacy: boolean;
   consentDataStorage: boolean;
+  contractAccepted: boolean;
 }
 
 export const initialApplicationData: ApplicationData = {
@@ -63,6 +64,7 @@ export const initialApplicationData: ApplicationData = {
   consentTerms: false,
   consentPrivacy: false,
   consentDataStorage: false,
+  contractAccepted: false,
 };
 
 export const CATEGORY_QUESTIONS: Record<Category, string[]> = {

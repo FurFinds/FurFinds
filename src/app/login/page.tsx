@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Container } from "@/components/Container";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { supabase } from "@/lib/supabase";
 
 const inputClass =
@@ -20,13 +21,20 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      const { data: profile } = await supabase.from("users").select("role").eq("id", data.user.id).single();
+      router.push(profile?.role === "business" ? "/business-dashboard" : "/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    router.push("/account");
   }
 
   return (
@@ -35,7 +43,18 @@ export default function LoginPage() {
         <h1 className="font-display text-3xl font-light text-black">
           Log in to <span className="text-dark-blue">FurFinds</span>
         </h1>
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+
+        <div className="mt-8">
+          <GoogleSignInButton />
+        </div>
+
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-black/10" />
+          <span className="text-xs font-medium uppercase tracking-wide text-black/40">or</span>
+          <div className="h-px flex-1 bg-black/10" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-black">
               Email

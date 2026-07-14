@@ -3,10 +3,14 @@ import { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Container } from "@/components/Container";
-import { blogPosts, getPostBySlug } from "@/lib/data";
+import { blogPosts as staticPosts } from "@/lib/data";
+import { getAllBlogPosts, getBlogPostBySlug } from "@/lib/blog";
+
+export const revalidate = 300;
+export const dynamicParams = true;
 
 export function generateStaticParams() {
-  return blogPosts.map((p) => ({ slug: p.slug }));
+  return staticPosts.map((p) => ({ slug: p.slug }));
 }
 
 export async function generateMetadata({
@@ -15,7 +19,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getBlogPostBySlug(slug);
   if (!post) return {};
   return { title: `${post.title} — FurFinds Blog`, description: post.excerpt };
 }
@@ -26,10 +30,12 @@ export default async function BlogPostPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const [post, allPosts] = await Promise.all([getBlogPostBySlug(slug), getAllBlogPosts()]);
   if (!post) notFound();
 
-  const related = blogPosts.filter((p) => p.slug !== post.slug && p.category === post.category).slice(0, 3);
+  const related = allPosts
+    .filter((p) => p.slug !== post.slug && p.category === post.category)
+    .slice(0, 3);
 
   return (
     <div className="bg-white py-10 lg:py-14">
@@ -45,7 +51,8 @@ export default async function BlogPostPage({
           {post.title}
         </h1>
         <p className="mt-3 text-sm text-black/50">
-          By {post.author} · {post.date}
+          By {post.author}
+          {post.date ? ` · ${post.date}` : ""}
         </p>
 
         <div className="relative mt-8 h-72 w-full overflow-hidden rounded-2xl sm:h-96">

@@ -1,17 +1,60 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Star } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useUser } from "@/lib/useUser";
 
-export function ReviewForm({ businessName }: { businessName: string }) {
+export function ReviewForm({
+  businessName,
+  businessSlug,
+}: {
+  businessName: string;
+  businessSlug: string;
+}) {
+  const { user, loading: userLoading } = useUser();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitted(true);
+    if (!user) return;
+    setSubmitting(true);
+    setError("");
+
+    try {
+      const { data: business, error: lookupError } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("slug", businessSlug)
+        .maybeSingle();
+
+      if (lookupError || !business) {
+        setError("Couldn't find this business to review. Please try again later.");
+        return;
+      }
+
+      const { error } = await supabase.from("reviews").insert({
+        business_id: business.id,
+        user_id: user.id,
+        rating,
+        comment,
+      });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (submitted) {
@@ -20,6 +63,19 @@ export function ReviewForm({ businessName }: { businessName: string }) {
         <p className="font-medium text-black">Thank you for your review!</p>
         <p className="mt-1 text-sm text-black/70">
           Your feedback helps other pet parents find great places like {businessName}.
+        </p>
+      </div>
+    );
+  }
+
+  if (!userLoading && !user) {
+    return (
+      <div className="rounded-2xl bg-bg-blue/40 p-6 text-center">
+        <p className="text-sm text-black/70">
+          <Link href="/login" className="font-medium text-dark-blue hover:underline">
+            Log in
+          </Link>{" "}
+          to leave a review for {businessName}.
         </p>
       </div>
     );
@@ -66,24 +122,14 @@ export function ReviewForm({ businessName }: { businessName: string }) {
         />
       </div>
 
-      <div className="mt-4">
-        <label htmlFor="review-photo" className="mb-2 block text-sm font-medium text-black">
-          Add a photo (optional)
-        </label>
-        <input
-          id="review-photo"
-          type="file"
-          accept="image/*"
-          className="w-full text-sm text-black/70 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-dark-blue"
-        />
-      </div>
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
       <button
         type="submit"
-        disabled={rating === 0}
+        disabled={rating === 0 || submitting}
         className="mt-5 w-full rounded-full bg-light-blue px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-dark-blue disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Submit Review
+        {submitting ? "Submitting..." : "Submit Review"}
       </button>
     </form>
   );

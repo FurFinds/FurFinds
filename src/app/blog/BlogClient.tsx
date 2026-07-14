@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { blogPosts } from "@/lib/data";
+import type { BlogPost } from "@/lib/types";
 
 const categories = [
   "All",
@@ -13,14 +13,14 @@ const categories = [
   "Industry News",
 ] as const;
 
-export function BlogClient() {
+export function BlogClient({ posts: allPosts }: { posts: BlogPost[] }) {
   const searchParams = useSearchParams();
   const category = searchParams.get("category");
   const activeCategory =
     category && categories.includes(category as (typeof categories)[number]) ? category : "All";
 
   const posts =
-    activeCategory === "All" ? blogPosts : blogPosts.filter((p) => p.category === activeCategory);
+    activeCategory === "All" ? allPosts : allPosts.filter((p) => p.category === activeCategory);
 
   return (
     <>

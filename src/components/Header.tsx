@@ -6,6 +6,7 @@ import { Menu, X } from "lucide-react";
 import { Logo } from "./Logo";
 import { Container } from "./Container";
 import { ButtonLink } from "./Button";
+import { useUser } from "@/lib/useUser";
 
 const navLinks = [
   { href: "/search", label: "Search" },
@@ -16,6 +17,7 @@ const navLinks = [
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const { user } = useUser();
 
   return (
     <header className="sticky top-0 z-40 border-b border-black/5 bg-white/90 backdrop-blur">
@@ -35,12 +37,20 @@ export function Header() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
-          <ButtonLink href="/login" variant="ghost" className="px-4 py-2">
-            Log In
-          </ButtonLink>
-          <ButtonLink href="/signup" variant="solid" className="px-5 py-2">
-            Sign Up
-          </ButtonLink>
+          {user ? (
+            <ButtonLink href="/dashboard" variant="solid" className="px-5 py-2">
+              Dashboard
+            </ButtonLink>
+          ) : (
+            <>
+              <ButtonLink href="/login" variant="ghost" className="px-4 py-2">
+                Log In
+              </ButtonLink>
+              <ButtonLink href="/signup" variant="solid" className="px-5 py-2">
+                Sign Up
+              </ButtonLink>
+            </>
+          )}
         </div>
 
         <button
@@ -67,12 +77,20 @@ export function Header() {
               </Link>
             ))}
             <div className="mt-2 flex gap-3 px-3">
-              <ButtonLink href="/login" variant="outline" className="flex-1">
-                Log In
-              </ButtonLink>
-              <ButtonLink href="/signup" variant="solid" className="flex-1">
-                Sign Up
-              </ButtonLink>
+              {user ? (
+                <ButtonLink href="/dashboard" variant="solid" className="flex-1">
+                  Dashboard
+                </ButtonLink>
+              ) : (
+                <>
+                  <ButtonLink href="/login" variant="outline" className="flex-1">
+                    Log In
+                  </ButtonLink>
+                  <ButtonLink href="/signup" variant="solid" className="flex-1">
+                    Sign Up
+                  </ButtonLink>
+                </>
+              )}
             </div>
           </Container>
         </div>

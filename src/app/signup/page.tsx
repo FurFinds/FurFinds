@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Container } from "@/components/Container";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { supabase } from "@/lib/supabase";
 
 const inputClass =
@@ -23,17 +24,39 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name, account_type: accountType } },
-    });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
+    try {
+      const role = accountType === "business" ? "business" : "pet_owner";
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name, account_type: accountType } },
+      });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (data.user) {
+        // A plain insert, not .upsert(...ignoreDuplicates), because Postgres
+        // requires SELECT-policy visibility to evaluate ON CONFLICT DO
+        // NOTHING even when the insert itself would be allowed — and a
+        // SELECT policy broad enough for anon to satisfy that (this runs
+        // pre-email-confirmation, so there's no session yet) would expose
+        // every user's email and name to unauthenticated requests. A
+        // duplicate-key conflict here only happens if this effect fires
+        // twice for the same brand-new signup, which is safe to ignore.
+        const { error: profileError } = await supabase
+          .from("users")
+          .insert({ id: data.user.id, email, name, role });
+        if (profileError && profileError.code !== "23505") throw profileError;
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setSubmitted(true);
   }
 
   if (submitted) {
@@ -72,7 +95,17 @@ export default function SignupPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+        <div className="mt-6">
+          <GoogleSignInButton accountType={accountType} />
+        </div>
+
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-black/10" />
+          <span className="text-xs font-medium uppercase tracking-wide text-black/40">or</span>
+          <div className="h-px flex-1 bg-black/10" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-black">
               Full Name

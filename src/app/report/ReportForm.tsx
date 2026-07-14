@@ -4,12 +4,12 @@ import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
-const ISSUE_TYPES = [
-  "Policy Violation",
-  "False Information",
-  "Unwelcoming Staff",
-  "Safety Concern",
-  "Other",
+const ISSUE_TYPES: { label: string; value: string }[] = [
+  { label: "Policy Violation", value: "policy_violation" },
+  { label: "False Information", value: "false_information" },
+  { label: "Unwelcoming Staff", value: "unwelcoming_staff" },
+  { label: "Safety Concern", value: "safety_concern" },
+  { label: "Other", value: "other" },
 ];
 
 const inputClass =
@@ -17,29 +17,40 @@ const inputClass =
 
 export function ReportForm() {
   const [businessName, setBusinessName] = useState("");
-  const [incidentDate, setIncidentDate] = useState("");
   const [issueType, setIssueType] = useState("");
   const [description, setDescription] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted">("idle");
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
+    setError("");
+
     try {
-      await supabase.from("complaints").insert([
-        {
-          business_name: businessName,
-          incident_date: incidentDate,
-          issue_type: issueType,
-          description,
-          email,
-        },
-      ]);
-    } catch {
-      // Best-effort submission — Supabase table may not exist yet in this environment.
-    } finally {
+      const { data: business } = await supabase
+        .from("businesses")
+        .select("id")
+        .ilike("name", businessName.trim())
+        .maybeSingle();
+
+      const { error: insertError } = await supabase.from("reports").insert({
+        business_id: business?.id ?? null,
+        user_email: email,
+        issue_type: issueType,
+        description: business ? description : `[Business: ${businessName}] ${description}`,
+      });
+
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
       setStatus("submitted");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setStatus((s) => (s === "submitting" ? "idle" : s));
     }
   }
 
@@ -70,20 +81,6 @@ export function ReportForm() {
       </div>
 
       <div>
-        <label htmlFor="incidentDate" className="mb-1.5 block text-sm font-medium text-black">
-          Date of Incident <span className="text-dark-blue">*</span>
-        </label>
-        <input
-          id="incidentDate"
-          type="date"
-          required
-          className={inputClass}
-          value={incidentDate}
-          onChange={(e) => setIncidentDate(e.target.value)}
-        />
-      </div>
-
-      <div>
         <label htmlFor="issueType" className="mb-1.5 block text-sm font-medium text-black">
           Issue Type <span className="text-dark-blue">*</span>
         </label>
@@ -96,8 +93,8 @@ export function ReportForm() {
         >
           <option value="">Select an issue type</option>
           {ISSUE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
+            <option key={type.value} value={type.value}>
+              {type.label}
             </option>
           ))}
         </select>
@@ -118,19 +115,6 @@ export function ReportForm() {
       </div>
 
       <div>
-        <label htmlFor="photo" className="mb-1.5 block text-sm font-medium text-black">
-          Photo Upload (optional)
-        </label>
-        <input
-          id="photo"
-          type="file"
-          accept="image/jpeg,image/png,application/pdf"
-          className="w-full rounded-xl border border-dashed border-black/20 bg-bg-blue/20 p-4 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-dark-blue"
-        />
-        <p className="mt-1 text-xs text-black/50">JPG, PNG, or PDF. Max 10MB.</p>
-      </div>
-
-      <div>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-black">
           Your Email <span className="text-dark-blue">*</span>
         </label>
@@ -144,6 +128,8 @@ export function ReportForm() {
           onChange={(e) => setEmail(e.target.value)}
         />
       </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
         type="submit"
