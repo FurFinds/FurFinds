@@ -5,7 +5,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <Link href="/" className={`flex items-center ${className ?? ""}`}>
       <Image
-        src="/images/logo.png"
+        src="/logo.png"
         alt="FurFinds"
         width={160}
         height={120}
