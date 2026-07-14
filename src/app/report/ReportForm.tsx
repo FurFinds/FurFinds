@@ -28,25 +28,30 @@ export function ReportForm() {
     setStatus("submitting");
     setError("");
 
-    const { data: business } = await supabase
-      .from("businesses")
-      .select("id")
-      .ilike("name", businessName.trim())
-      .maybeSingle();
+    try {
+      const { data: business } = await supabase
+        .from("businesses")
+        .select("id")
+        .ilike("name", businessName.trim())
+        .maybeSingle();
 
-    const { error: insertError } = await supabase.from("reports").insert({
-      business_id: business?.id ?? null,
-      user_email: email,
-      issue_type: issueType,
-      description: business ? description : `[Business: ${businessName}] ${description}`,
-    });
+      const { error: insertError } = await supabase.from("reports").insert({
+        business_id: business?.id ?? null,
+        user_email: email,
+        issue_type: issueType,
+        description: business ? description : `[Business: ${businessName}] ${description}`,
+      });
 
-    if (insertError) {
-      setStatus("idle");
-      setError(insertError.message);
-      return;
+      if (insertError) {
+        setError(insertError.message);
+        return;
+      }
+      setStatus("submitted");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setStatus((s) => (s === "submitting" ? "idle" : s));
     }
-    setStatus("submitted");
   }
 
   if (status === "submitted") {

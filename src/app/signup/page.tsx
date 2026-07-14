@@ -24,26 +24,30 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const role = accountType === "business" ? "business" : "pet_owner";
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name, account_type: accountType } },
-    });
-    if (error) {
-      setError(error.message);
+    try {
+      const role = accountType === "business" ? "business" : "pet_owner";
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name, account_type: accountType } },
+      });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (data.user) {
+        await supabase
+          .from("users")
+          .upsert({ id: data.user.id, email, name, role }, { onConflict: "id", ignoreDuplicates: true });
+      }
+
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (data.user) {
-      await supabase
-        .from("users")
-        .upsert({ id: data.user.id, email, name, role }, { onConflict: "id", ignoreDuplicates: true });
-    }
-
-    setLoading(false);
-    setSubmitted(true);
   }
 
   if (submitted) {

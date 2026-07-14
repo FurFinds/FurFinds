@@ -27,30 +27,34 @@ export function ReviewForm({
     setSubmitting(true);
     setError("");
 
-    const { data: business, error: lookupError } = await supabase
-      .from("businesses")
-      .select("id")
-      .eq("slug", businessSlug)
-      .maybeSingle();
+    try {
+      const { data: business, error: lookupError } = await supabase
+        .from("businesses")
+        .select("id")
+        .eq("slug", businessSlug)
+        .maybeSingle();
 
-    if (lookupError || !business) {
+      if (lookupError || !business) {
+        setError("Couldn't find this business to review. Please try again later.");
+        return;
+      }
+
+      const { error } = await supabase.from("reviews").insert({
+        business_id: business.id,
+        user_id: user.id,
+        rating,
+        comment,
+      });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+      setSubmitted(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setSubmitting(false);
-      setError("Couldn't find this business to review. Please try again later.");
-      return;
     }
-
-    const { error } = await supabase.from("reviews").insert({
-      business_id: business.id,
-      user_id: user.id,
-      rating,
-      comment,
-    });
-    setSubmitting(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    setSubmitted(true);
   }
 
   if (submitted) {

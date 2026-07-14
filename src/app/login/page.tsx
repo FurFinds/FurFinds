@@ -21,17 +21,20 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setError(error.message);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      const { data: profile } = await supabase.from("users").select("role").eq("id", data.user.id).single();
+      router.push(profile?.role === "business" ? "/business-dashboard" : "/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { data: profile } = await supabase.from("users").select("role").eq("id", data.user.id).single();
-
-    setLoading(false);
-    router.push(profile?.role === "business" ? "/business-dashboard" : "/dashboard");
   }
 
   return (

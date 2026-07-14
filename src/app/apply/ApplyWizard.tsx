@@ -187,6 +187,26 @@ export function ApplyWizard() {
     update("photos", [...data.photos, ...files.map((f) => f.name)]);
   }
 
+  // Checked before the logged-out gate below: once handleSubmit() has
+  // resolved, a session that lapses afterward (a background token refresh
+  // failing, a sign-out in another tab) must not swap this confirmation
+  // out for "Sign up to apply" — the application was already saved.
+  if (status === "submitted") {
+    return (
+      <div className="flex flex-col items-center rounded-2xl bg-bg-blue/40 px-6 py-16 text-center">
+        <CheckCircle2 size={48} className="text-dark-blue" />
+        <h2 className="mt-5 font-display text-2xl font-medium text-black">
+          Application submitted!
+        </h2>
+        <p className="mt-2 max-w-md text-black/70">
+          Thank you for applying to become a verified FurFinds business. Our team will review
+          your application and follow up at {data.email || "the email you provided"} within 5–7
+          business days.
+        </p>
+      </div>
+    );
+  }
+
   if (!userLoading && !user) {
     return (
       <div className="flex flex-col items-center rounded-2xl bg-bg-blue/40 px-6 py-16 text-center">
@@ -208,22 +228,6 @@ export function ApplyWizard() {
             Log In
           </Link>
         </div>
-      </div>
-    );
-  }
-
-  if (status === "submitted") {
-    return (
-      <div className="flex flex-col items-center rounded-2xl bg-bg-blue/40 px-6 py-16 text-center">
-        <CheckCircle2 size={48} className="text-dark-blue" />
-        <h2 className="mt-5 font-display text-2xl font-medium text-black">
-          Application submitted!
-        </h2>
-        <p className="mt-2 max-w-md text-black/70">
-          Thank you for applying to become a verified FurFinds business. Our team will review
-          your application and follow up at {data.email || "the email you provided"} within 5–7
-          business days.
-        </p>
       </div>
     );
   }
