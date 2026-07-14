@@ -15,7 +15,7 @@ export function Footer() {
   return (
     <footer className="border-t border-black/5 bg-dark-blue text-white">
       <Container className="flex flex-col items-center gap-6 py-14 text-center">
-        <Logo className="[&_span]:text-white" />
+        <Logo />
         <p className="max-w-md text-sm text-white/80">Making pet-friendly mean something.</p>
 
         <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
