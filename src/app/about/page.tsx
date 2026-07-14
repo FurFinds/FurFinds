@@ -8,6 +8,11 @@ export const metadata: Metadata = {
   description: "Meet the team behind FurFinds and learn about our mission and vision.",
 };
 
+// Without this, the page prerenders once at build time and never re-fetches
+// site_settings — a founder photo uploaded through HQ after deploy would
+// never appear until the next full rebuild.
+export const revalidate = 300;
+
 async function getFounderPhotoUrl(): Promise<string | null> {
   const { data } = await supabase
     .from("site_settings")
