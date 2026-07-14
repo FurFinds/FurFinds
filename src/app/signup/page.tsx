@@ -37,9 +37,18 @@ export default function SignupPage() {
       }
 
       if (data.user) {
-        await supabase
+        // A plain insert, not .upsert(...ignoreDuplicates), because Postgres
+        // requires SELECT-policy visibility to evaluate ON CONFLICT DO
+        // NOTHING even when the insert itself would be allowed — and a
+        // SELECT policy broad enough for anon to satisfy that (this runs
+        // pre-email-confirmation, so there's no session yet) would expose
+        // every user's email and name to unauthenticated requests. A
+        // duplicate-key conflict here only happens if this effect fires
+        // twice for the same brand-new signup, which is safe to ignore.
+        const { error: profileError } = await supabase
           .from("users")
-          .upsert({ id: data.user.id, email, name, role }, { onConflict: "id", ignoreDuplicates: true });
+          .insert({ id: data.user.id, email, name, role });
+        if (profileError && profileError.code !== "23505") throw profileError;
       }
 
       setSubmitted(true);

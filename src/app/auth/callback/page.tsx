@@ -17,16 +17,22 @@ function AuthCallbackInner() {
       if (handled) return;
       handled = true;
 
-      await supabase.from("users").upsert(
-        {
-          id: user.id,
-          email: user.email,
-          name: (user.user_metadata?.full_name as string) ?? user.email,
-          avatar_url: (user.user_metadata?.avatar_url as string) ?? null,
-          role: type,
-        },
-        { onConflict: "id", ignoreDuplicates: true }
-      );
+      // A plain insert, not .upsert(...ignoreDuplicates) — see the matching
+      // comment in signup/page.tsx: Postgres needs SELECT-policy visibility
+      // to evaluate ON CONFLICT DO NOTHING, which this table doesn't grant.
+      // A duplicate-key conflict here just means this account already has
+      // a profile row (returning OAuth user), which is expected and safe
+      // to ignore rather than overwrite.
+      const { error: profileError } = await supabase.from("users").insert({
+        id: user.id,
+        email: user.email,
+        name: (user.user_metadata?.full_name as string) ?? user.email,
+        avatar_url: (user.user_metadata?.avatar_url as string) ?? null,
+        role: type,
+      });
+      if (profileError && profileError.code !== "23505") {
+        console.warn("Failed to create profile row:", profileError.message);
+      }
 
       router.replace(type === "business" ? "/business-dashboard" : "/dashboard");
     }
