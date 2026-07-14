@@ -7,8 +7,8 @@ export function Logo({ className }: { className?: string }) {
       <Image
         src="/logo.png"
         alt="FurFinds"
-        width={160}
-        height={120}
+        width={800}
+        height={600}
         className="h-12 w-auto"
         priority
       />
